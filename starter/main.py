@@ -1,134 +1,36 @@
 import os
-import sys
-from datetime import datetime
 from dotenv import load_dotenv
-from print_color import print
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
 from src.assistant import DocumentAssistant
 
+load_dotenv()
 
-def print_header():
-    """Print a nice header"""
-    print("\n" + "=" * 60)
-    print("DocDacity Intelligent Document Assistant", color='blue')
-    print("=" * 60 + "\n")
-
-
-def print_help():
-    """Print help information"""
-    print("\nAVAILABLE COMMANDS:", color='blue')
-    print("  /help     - Show this help message")
-    print("  /docs     - List available documents")
-    print("  /quit     - Exit the assistant")
-    print("\nExample queries:")
-    print("  - What's the total amount in invoice INV-001?")
-    print("  - Summarize all contracts")
-    print("  - Calculate the sum of all invoice totals")
-    print("  - Find documents with amounts over $50,000")
-    print()
-
-
-def list_documents(assistant: DocumentAssistant):
-    """List all available documents"""
-    print("\nAVAILABLE DOCUMENTS:", color='blue')
-    print("-" * 40)
-
-    for doc_id, doc in assistant.retriever.documents.items():
-        print(f"ID: {doc_id}")
-        print(f"Title: {doc.title}")
-        print(f"Type: {doc.doc_type}")
-        if 'total' in doc.metadata:
-            print(f"Total: ${doc.metadata['total']:,.2f}")
-        elif 'amount' in doc.metadata:
-            print(f"Amount: ${doc.metadata['amount']:,.2f}")
-        elif 'value' in doc.metadata:
-            print(f"Value: ${doc.metadata['value']:,.2f}")
-        print("-" * 40)
-
+if not os.getenv("OPENAI_API_KEY"):
+    print("Error: OPENAI_API_KEY not found in environment variables")
+    exit(1)
 
 def main():
-    """Main interactive loop"""
-    # Load environment variables
-    load_dotenv()
+    assistant = DocumentAssistant()
 
-    # Get API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("Error: OPENAI_API_KEY not found in environment variables")
-        print("Please create a .env file with your OpenAI API key")
-        return
+    sample_doc = """
+    Q3 Financial Report: Total revenue was $450,000, up from $380,000 in Q2.
+    Operating expenses were $210,000. Net profit margin improved due to reduced
+    marketing spend. The healthcare division reported 1,200 new patient visits.
+    """
 
-    # Print header
-    print_header()
+    examples = [
+        "What was the total revenue in Q3?",
+        "Summarize this report in two sentences.",
+        "Calculate the increase from Q2 to Q3 revenue.",
+    ]
 
-    # Create assistant
-    print(" INITIALIZING ASSISTANT...", color='green')
-    assistant = DocumentAssistant(
-        openai_api_key=api_key,
-        model_name="gpt-4o",
-        temperature=0.1
-    )
-
-    # Start session
-    user_id = input("Enter your user ID (or press Enter for 'demo_user'): ").strip() or "demo_user"
-    session_id = assistant.start_session(user_id)
-    print(f"Session started: {session_id}")
-
-    # Show help
-    print_help()
-
-    # Main interaction loop
-    while True:
-        try:
-            # Get user input
-            user_input = input("\nEnter Message: ").strip()
-
-            if not user_input:
-                continue
-
-            # Handle commands
-            if user_input.lower() == "/quit":
-                print("\nGoodbye!", color='blue')
-                break
-            elif user_input.lower() == "/help":
-                print_help()
-                continue
-            elif user_input.lower() == "/docs":
-                list_documents(assistant)
-                continue
-
-            # Process the message
-            print("\nProcessing...", color='yellow')
-            result = assistant.process_message(user_input)
-
-            if result["success"]:
-                print("\n🤖 Assistant:", end=" ")
-
-                if result.get("response"):
-                    print(result["response"])
-                if result.get("intent"):
-                    intent = result["intent"]
-                    print(f"\nINTENT: {intent['intent_type']}", color='green')
-                if result.get("active_documents"):
-                    print(f"\nSOURCES: {', '.join(result['active_documents'])}", color='blue')
-                if result.get("tools_used"):
-                    print(f"\nTOOLS USED: {', '.join(result['tools_used'])}", color='magenta')
-                if result.get("summary"):
-                    print(f"\nCONVERSATION SUMMARY: {result['summary']}", color='cyan')
-
-
-            else:
-                print(f"\nError: {result.get('error', 'Unknown error')}", color='red')
-
-        except KeyboardInterrupt:
-            print("\n\nGoodbye!", color='blue')
-            break
-        except Exception as e:
-            print(f"\nUnexpected error: {str(e)}", color='red')
-
+    session_id = None
+    for question in examples:
+        response, session_id = assistant.ask(question, sample_doc, session_id=session_id)
+        print(f"\nQ: {question}")
+        print(f"A: {response.answer}")
+        print(f"Confidence: {response.confidence}")
+        if response.tool_calls_made:
+            print(f"Tools used: {response.tool_calls_made}")
 
 if __name__ == "__main__":
     main()
